@@ -14,7 +14,10 @@ export default function Index() {
   const [timerActive, setTimerActive] = useState(false);
   const [remainingTime, setRemainingTime] = useState(0);
   const [timerOperation, setTimerOperation] = useState<'opening' | 'closing' | null>(null);
+  const [autoCloseActive, setAutoCloseActive] = useState(false);
+  const [autoCloseRemaining, setAutoCloseRemaining] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const autoCloseTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -29,11 +32,14 @@ export default function Index() {
     checkApiStatus();
   }, []);
 
-  // Nettoyer le timer au démontage du composant
+  // Nettoyer les timers au démontage du composant
   useEffect(() => {
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
+      }
+      if (autoCloseTimerRef.current) {
+        clearInterval(autoCloseTimerRef.current);
       }
     };
   }, []);
@@ -73,6 +79,43 @@ export default function Index() {
     setStatusColor('#FF9800'); // Orange pour l'opération en cours
   };
 
+  const startAutoCloseTimer = (remainingMs: number) => {
+    setAutoCloseActive(true);
+    setAutoCloseRemaining(Math.ceil(remainingMs / 1000)); // Convertir en secondes
+
+    // Nettoyer l'ancien timer s'il existe
+    if (autoCloseTimerRef.current) {
+      clearInterval(autoCloseTimerRef.current);
+    }
+
+    autoCloseTimerRef.current = setInterval(() => {
+      setAutoCloseRemaining(prev => {
+        const newTime = prev - 1;
+        if (newTime <= 0) {
+          // Timer d'autofermeture terminé
+          setAutoCloseActive(false);
+          if (autoCloseTimerRef.current) {
+            clearInterval(autoCloseTimerRef.current);
+            autoCloseTimerRef.current = null;
+          }
+          // Vérifier le nouveau statut
+          checkApiStatus();
+          return 0;
+        }
+        return newTime;
+      });
+    }, 1000);
+  };
+
+  const stopAutoCloseTimer = () => {
+    if (autoCloseTimerRef.current) {
+      clearInterval(autoCloseTimerRef.current);
+      autoCloseTimerRef.current = null;
+    }
+    setAutoCloseActive(false);
+    setAutoCloseRemaining(0);
+  };
+
   const checkApiStatus = async () => {
     setLoading(true);
     setApiStatus('Actualisation en cours...');
@@ -87,26 +130,38 @@ export default function Index() {
         case 'open':
           statusText = 'Porte ouverte';
           setStatusColor('#F44336'); // Rouge pour ouvert
+
+          // Gérer l'autofermeture si elle est activée
+          if (status.auto_close_enabled && status.auto_close_remaining && status.auto_close_remaining > 0) {
+            startAutoCloseTimer(status.auto_close_remaining);
+          } else {
+            stopAutoCloseTimer();
+          }
           break;
         case 'closed':
           statusText = 'Porte fermée';
           setStatusColor('#4CAF50'); // Vert pour fermé
+          stopAutoCloseTimer(); // Arrêter l'autofermeture si active
           break;
         case 'opening':
           statusText = 'Ouverture en cours...';
           setStatusColor('#FF9800'); // Orange pour en mouvement
+          stopAutoCloseTimer();
           break;
         case 'closing':
           statusText = 'Fermeture en cours...';
           setStatusColor('#FF9800'); // Orange pour en mouvement
+          stopAutoCloseTimer();
           break;
         case 'unknown':
           statusText = 'Statut inconnu';
           setStatusColor('#FF9800'); // Orange pour inconnu
+          stopAutoCloseTimer();
           break;
         default:
           statusText = `Statut: ${status.status}`;
           setStatusColor('#666'); // Gris par défaut
+          stopAutoCloseTimer();
       }
 
       setApiStatus(`${statusText}${status.version ? ` (v${status.version})` : ''}`);
@@ -116,6 +171,7 @@ export default function Index() {
         : 'Erreur de connexion inconnue';
       setApiStatus(errorMessage);
       setStatusColor('#F44336');
+      stopAutoCloseTimer();
     } finally {
       setLoading(false);
     }
@@ -186,6 +242,31 @@ export default function Index() {
         }}>
           {apiStatus}
         </Text>
+
+        {/* Affichage du décompte d'autofermeture */}
+        {autoCloseActive && !timerActive && (
+          <>
+            <Text style={{
+              fontSize: 16,
+              color: '#FF9800',
+              marginTop: 8,
+              fontWeight: '500',
+              textAlign: 'center'
+            }}>
+              Fermeture automatique dans {autoCloseRemaining}s
+            </Text>
+            <Text style={{
+              fontSize: 12,
+              color: '#666',
+              marginTop: 5,
+              textAlign: 'center',
+              fontStyle: 'italic'
+            }}>
+              Vous pouvez fermer manuellement à tout moment
+            </Text>
+          </>
+        )}
+
         {!loading && !timerActive && (
           <Button
             label="Rafraîchir"
@@ -208,22 +289,9 @@ export default function Index() {
       </View>
 
       <View style={{ alignItems: 'center', marginBottom: 30 }}>
-          {/* Bouton Ouvrir - Rouge */}
-          <Button
-            label={operationInProgress ? "Commande en cours..." : "Ouvrir"}
-            onPress={handleOpenGate}
-            variant="primary"
-            size="large"
-            disabled={operationInProgress || timerActive}
-            loading={operationInProgress}
-            style={{
-              marginBottom: 20,
-              backgroundColor: '#F44336', // Rouge pour ouvrir
-              minWidth: 200
-            }}
-          />
-
-          {/* Bouton Fermer - Vert */}
+        {/* Affichage conditionnel des boutons selon le statut */}
+        {(apiStatus.includes('ouverte') || apiStatus.includes('Ouverture')) && (
+          // Porte ouverte ou en cours d'ouverture -> Bouton Fermer seulement
           <Button
             label={operationInProgress ? "Commande en cours..." : "Fermer"}
             onPress={handleCloseGate}
@@ -236,6 +304,56 @@ export default function Index() {
               minWidth: 200
             }}
           />
+        )}
+
+        {(apiStatus.includes('fermée') || apiStatus.includes('Fermeture')) && (
+          // Porte fermée ou en cours de fermeture -> Bouton Ouvrir seulement
+          <Button
+            label={operationInProgress ? "Commande en cours..." : "Ouvrir"}
+            onPress={handleOpenGate}
+            variant="primary"
+            size="large"
+            disabled={operationInProgress || timerActive}
+            loading={operationInProgress}
+            style={{
+              backgroundColor: '#F44336', // Rouge pour ouvrir
+              minWidth: 200
+            }}
+          />
+        )}
+
+        {(!apiStatus.includes('ouverte') && !apiStatus.includes('Ouverture') &&
+          !apiStatus.includes('fermée') && !apiStatus.includes('Fermeture')) && (
+          // Statut inconnu, erreur ou autre -> Afficher les deux boutons
+          <>
+            <Button
+              label={operationInProgress ? "Commande en cours..." : "Ouvrir"}
+              onPress={handleOpenGate}
+              variant="primary"
+              size="large"
+              disabled={operationInProgress || timerActive}
+              loading={operationInProgress}
+              style={{
+                marginBottom: 20,
+                backgroundColor: '#F44336', // Rouge pour ouvrir
+                minWidth: 200
+              }}
+            />
+
+            <Button
+              label={operationInProgress ? "Commande en cours..." : "Fermer"}
+              onPress={handleCloseGate}
+              variant="primary"
+              size="large"
+              disabled={operationInProgress || timerActive}
+              loading={operationInProgress}
+              style={{
+                backgroundColor: '#4CAF50', // Vert pour fermer
+                minWidth: 200
+              }}
+            />
+          </>
+        )}
       </View>
     </ScrollView>
   );

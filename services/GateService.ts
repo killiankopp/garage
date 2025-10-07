@@ -5,6 +5,9 @@ export interface GateStatus {
   message?: string;
   version?: string;
   timestamp?: string;
+  auto_close_enabled?: boolean;
+  auto_close_time?: number;
+  auto_close_remaining?: number;
 }
 
 export interface GateOperation {
