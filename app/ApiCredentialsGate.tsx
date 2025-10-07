@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator } from 'react-native';
-import { getApiUrl, getBearerToken, saveApiUrl, saveBearerToken, clearApiCredentials } from './apiCredentials';
+import { getApiUrl, getBearerToken, saveApiUrl, saveBearerToken } from './apiCredentials';
 
 export default function ApiCredentialsGate({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
