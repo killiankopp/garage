@@ -1,6 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, TextInput, StyleSheet, ActivityIndicator, Alert } from 'react-native';
-import { getApiUrl, getBearerToken, saveApiUrl, saveBearerToken } from '@/utils/apiCredentials';
+import {
+  getApiUrl,
+  getBearerToken,
+  saveApiUrl,
+  saveBearerToken,
+  getOpeningTime,
+  getClosingTime,
+  saveOpeningTime,
+  saveClosingTime
+} from '@/utils/apiCredentials';
 import { Button } from "../components";
 import { GateService, ApiError } from "@/services";
 
@@ -14,8 +23,12 @@ export default function ApiCredentialsGate({ children }: { children: React.React
   const [loading, setLoading] = useState(true);
   const [apiUrl, setApiUrl] = useState<string | null>(null);
   const [bearerToken, setBearerTokenState] = useState<string | null>(null);
+  const [openingTime, setOpeningTime] = useState<number | null>(null);
+  const [closingTime, setClosingTime] = useState<number | null>(null);
   const [inputUrl, setInputUrl] = useState('');
   const [inputToken, setInputToken] = useState('');
+  const [inputOpeningTime, setInputOpeningTime] = useState('');
+  const [inputClosingTime, setInputClosingTime] = useState('');
   const [editing, setEditing] = useState(false);
   const [apiStatus, setApiStatus] = useState<ApiStatus>({ isHealthy: false });
   const [checkingStatus, setCheckingStatus] = useState(false);
@@ -52,8 +65,13 @@ export default function ApiCredentialsGate({ children }: { children: React.React
     (async () => {
       const url = await getApiUrl();
       const token = await getBearerToken();
+      const openTime = await getOpeningTime();
+      const closeTime = await getClosingTime();
+
       setApiUrl(url);
       setBearerTokenState(token);
+      setOpeningTime(openTime);
+      setClosingTime(closeTime);
       setLoading(false);
 
       // Vérifier le statut de l'API si les credentials sont disponibles
@@ -75,13 +93,23 @@ export default function ApiCredentialsGate({ children }: { children: React.React
     try {
       await saveApiUrl(inputUrl);
       await saveBearerToken(inputToken);
+
+      // Sauvegarder les temps avec valeurs par défaut si vides
+      const openTime = inputOpeningTime ? parseInt(inputOpeningTime, 10) : 15;
+      const closeTime = inputClosingTime ? parseInt(inputClosingTime, 10) : 15;
+
+      await saveOpeningTime(openTime);
+      await saveClosingTime(closeTime);
+
       setApiUrl(inputUrl);
       setBearerTokenState(inputToken);
+      setOpeningTime(openTime);
+      setClosingTime(closeTime);
       setEditing(false);
 
       // Vérifier immédiatement le statut après sauvegarde
       await checkApiStatus();
-    } catch (_error) {
+    } catch {
       Alert.alert('Erreur', 'Impossible de sauvegarder les paramètres');
     } finally {
       setLoading(false);
@@ -91,6 +119,8 @@ export default function ApiCredentialsGate({ children }: { children: React.React
   const handleEdit = async () => {
     setInputUrl(apiUrl || '');
     setInputToken(bearerToken || '');
+    setInputOpeningTime(openingTime?.toString() || '15');
+    setInputClosingTime(closingTime?.toString() || '15');
     setEditing(true);
   };
 
@@ -132,7 +162,7 @@ export default function ApiCredentialsGate({ children }: { children: React.React
       <View style={styles.container}>
         <Text style={styles.title}>Configuration API</Text>
 
-        <Text style={styles.label}>URL de API</Text>
+        <Text style={styles.label}>URL de l&apos;API</Text>
         <TextInput
           style={styles.input}
           value={inputUrl}
@@ -149,6 +179,24 @@ export default function ApiCredentialsGate({ children }: { children: React.React
           placeholder="token..."
           autoCapitalize="none"
           secureTextEntry
+        />
+
+        <Text style={styles.label}>Temps d&apos;ouverture (secondes)</Text>
+        <TextInput
+          style={styles.input}
+          value={inputOpeningTime}
+          onChangeText={setInputOpeningTime}
+          placeholder="15"
+          keyboardType="numeric"
+        />
+
+        <Text style={styles.label}>Temps de fermeture (secondes)</Text>
+        <TextInput
+          style={styles.input}
+          value={inputClosingTime}
+          onChangeText={setInputClosingTime}
+          placeholder="15"
+          keyboardType="numeric"
         />
 
         <View style={styles.buttonContainer}>

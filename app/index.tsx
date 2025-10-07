@@ -1,17 +1,77 @@
 import { Text, Alert, ScrollView, ActivityIndicator, View } from "react-native";
 import { Button } from "../components";
 import { GateService, ApiError } from "@/services";
-import { useEffect, useState } from "react";
+import { getOpeningTime, getClosingTime } from "@/utils/apiCredentials";
+import { useEffect, useState, useRef } from "react";
 
 export default function Index() {
   const [apiStatus, setApiStatus] = useState<string>('Vérification en cours...');
   const [loading, setLoading] = useState(true);
   const [statusColor, setStatusColor] = useState('#666');
   const [operationInProgress, setOperationInProgress] = useState(false);
+  const [openingTime, setOpeningTime] = useState<number>(15);
+  const [closingTime, setClosingTime] = useState<number>(15);
+  const [timerActive, setTimerActive] = useState(false);
+  const [remainingTime, setRemainingTime] = useState(0);
+  const [timerOperation, setTimerOperation] = useState<'opening' | 'closing' | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    const loadSettings = async () => {
+      const openTime = await getOpeningTime();
+      const closeTime = await getClosingTime();
+
+      setOpeningTime(openTime || 15);
+      setClosingTime(closeTime || 15);
+    };
+
+    loadSettings();
     checkApiStatus();
   }, []);
+
+  // Nettoyer le timer au démontage du composant
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
+
+  const startTimer = (duration: number, operation: 'opening' | 'closing') => {
+    setTimerActive(true);
+    setTimerOperation(operation);
+    setRemainingTime(duration);
+
+    // Mettre à jour immédiatement le statut
+    updateTimerStatus(duration, operation);
+
+    timerRef.current = setInterval(() => {
+      setRemainingTime(prev => {
+        const newTime = prev - 1;
+        if (newTime <= 0) {
+          // Timer terminé
+          setTimerActive(false);
+          setTimerOperation(null);
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          // Vérifier le statut final
+          checkApiStatus();
+          return 0;
+        }
+        updateTimerStatus(newTime, operation);
+        return newTime;
+      });
+    }, 1000);
+  };
+
+  const updateTimerStatus = (timeLeft: number, operation: 'opening' | 'closing') => {
+    const operationText = operation === 'opening' ? 'Ouverture' : 'Fermeture';
+    setApiStatus(`${operationText} en cours... ${timeLeft}s`);
+    setStatusColor('#FF9800'); // Orange pour l'opération en cours
+  };
 
   const checkApiStatus = async () => {
     setLoading(true);
@@ -65,10 +125,14 @@ export default function Index() {
     setOperationInProgress(true);
     try {
       const operation = await GateService.open();
+
+      // Démarrer le timer avec le temps configuré
+      startTimer(openingTime, 'opening');
+
       Alert.alert(
         "Ouverture en cours",
-        `Porte en cours d'ouverture.\nTemps restant: ${Math.round(operation.timeout_remaining / 1000)}s`,
-        [{ text: "OK", onPress: () => checkApiStatus() }]
+        `Porte en cours d'ouverture.\nTemps configuré: ${openingTime}s\nTemps restant API: ${Math.round(operation.timeout_remaining / 1000)}s`,
+        [{ text: "OK" }]
       );
     } catch (error) {
       const errorMessage = error instanceof ApiError
@@ -84,10 +148,14 @@ export default function Index() {
     setOperationInProgress(true);
     try {
       const operation = await GateService.close();
+
+      // Démarrer le timer avec le temps configuré
+      startTimer(closingTime, 'closing');
+
       Alert.alert(
         "Fermeture en cours",
-        `Porte en cours de fermeture.\nTemps restant: ${Math.round(operation.timeout_remaining / 1000)}s`,
-        [{ text: "OK", onPress: () => checkApiStatus() }]
+        `Porte en cours de fermeture.\nTemps configuré: ${closingTime}s\nTemps restant API: ${Math.round(operation.timeout_remaining / 1000)}s`,
+        [{ text: "OK" }]
       );
     } catch (error) {
       const errorMessage = error instanceof ApiError
@@ -118,7 +186,7 @@ export default function Index() {
         }}>
           {apiStatus}
         </Text>
-        {!loading && (
+        {!loading && !timerActive && (
           <Button
             label="Rafraîchir"
             onPress={checkApiStatus}
@@ -126,6 +194,16 @@ export default function Index() {
             size="small"
             style={{ marginTop: 10 }}
           />
+        )}
+        {timerActive && (
+          <Text style={{
+            fontSize: 14,
+            color: '#666',
+            marginTop: 5,
+            fontStyle: 'italic'
+          }}>
+            Actualisation automatique à la fin...
+          </Text>
         )}
       </View>
 
@@ -136,7 +214,7 @@ export default function Index() {
             onPress={handleOpenGate}
             variant="primary"
             size="large"
-            disabled={operationInProgress}
+            disabled={operationInProgress || timerActive}
             loading={operationInProgress}
             style={{
               marginBottom: 20,
@@ -151,7 +229,7 @@ export default function Index() {
             onPress={handleCloseGate}
             variant="primary"
             size="large"
-            disabled={operationInProgress}
+            disabled={operationInProgress || timerActive}
             loading={operationInProgress}
             style={{
               backgroundColor: '#4CAF50', // Vert pour fermer
