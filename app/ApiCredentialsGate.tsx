@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ActivityIndicator } from 'react-native';
 import { getApiUrl, getBearerToken, saveApiUrl, saveBearerToken } from './apiCredentials';
+import { Button } from "../components";
 
 export default function ApiCredentialsGate({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
@@ -43,7 +44,8 @@ export default function ApiCredentialsGate({ children }: { children: React.React
   if (!apiUrl || !bearerToken || editing) {
     return (
       <View style={styles.container}>
-        <Text style={styles.label}>URL de API :</Text>
+
+        <Text style={styles.label}>URL de API</Text>
         <TextInput
           style={styles.input}
           value={inputUrl}
@@ -51,7 +53,8 @@ export default function ApiCredentialsGate({ children }: { children: React.React
           placeholder="https://mon-api.com"
           autoCapitalize="none"
         />
-        <Text style={styles.label}>Bearer Token :</Text>
+
+        <Text style={styles.label}>Bearer Token</Text>
         <TextInput
           style={styles.input}
           value={inputToken}
@@ -60,9 +63,19 @@ export default function ApiCredentialsGate({ children }: { children: React.React
           autoCapitalize="none"
           secureTextEntry
         />
-        <Button title="Enregistrer" onPress={handleSave} disabled={!inputUrl || !inputToken} />
+
+
+        <Button
+            label="Enregistrer"
+            onPress={handleSave}
+            disabled={!inputUrl || !inputToken}
+        />
+
         {(apiUrl && bearerToken) && (
-          <Button title="Annuler" onPress={() => setEditing(false)} color="#888" />
+          <Button
+            label="Annuler"
+            onPress={() => setEditing(false)}
+            variant="secondary" />
         )}
       </View>
     );
@@ -72,7 +85,12 @@ export default function ApiCredentialsGate({ children }: { children: React.React
     <View style={{ flex: 1 }}>
       {children}
       <View style={styles.editButton}>
-        <Button title="Paramètres" onPress={handleEdit} />
+        <Button
+            label="Paramètres"
+            onPress={handleEdit}
+            variant={"outline"}
+            size={"small"}
+        />
       </View>
     </View>
   );
