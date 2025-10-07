@@ -1,7 +1,14 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ActivityIndicator } from 'react-native';
-import { getApiUrl, getBearerToken, saveApiUrl, saveBearerToken } from './apiCredentials';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, TextInput, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { getApiUrl, getBearerToken, saveApiUrl, saveBearerToken } from '@/utils/apiCredentials';
 import { Button } from "../components";
+import { GateService, ApiError } from "@/services";
+
+interface ApiStatus {
+  isHealthy: boolean;
+  error?: string;
+  lastChecked?: Date;
+}
 
 export default function ApiCredentialsGate({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
@@ -10,6 +17,36 @@ export default function ApiCredentialsGate({ children }: { children: React.React
   const [inputUrl, setInputUrl] = useState('');
   const [inputToken, setInputToken] = useState('');
   const [editing, setEditing] = useState(false);
+  const [apiStatus, setApiStatus] = useState<ApiStatus>({ isHealthy: false });
+  const [checkingStatus, setCheckingStatus] = useState(false);
+
+  // Fonction pour vérifier le statut de l'API avec useCallback
+  const checkApiStatus = useCallback(async (): Promise<void> => {
+    if (!apiUrl || !bearerToken) return;
+
+    setCheckingStatus(true);
+    try {
+      const isHealthy = await GateService.isApiHealthy();
+      setApiStatus({
+        isHealthy,
+        lastChecked: new Date(),
+        error: undefined
+      });
+    } catch (error) {
+      const errorMessage = error instanceof ApiError
+        ? error.message
+        : 'Erreur de connexion';
+
+      setApiStatus({
+        isHealthy: false,
+        error: errorMessage,
+        lastChecked: new Date()
+      });
+      // Pas besoin de re-lancer l'exception ici car on gère l'erreur localement
+    } finally {
+      setCheckingStatus(false);
+    }
+  }, [apiUrl, bearerToken]);
 
   useEffect(() => {
     (async () => {
@@ -18,23 +55,72 @@ export default function ApiCredentialsGate({ children }: { children: React.React
       setApiUrl(url);
       setBearerTokenState(token);
       setLoading(false);
+
+      // Vérifier le statut de l'API si les credentials sont disponibles
+      if (url && token) {
+        await checkApiStatus();
+      }
     })();
-  }, []);
+  }, [checkApiStatus]);
+
+  // Vérifier le statut quand les credentials changent
+  useEffect(() => {
+    if (apiUrl && bearerToken && !editing) {
+      checkApiStatus();
+    }
+  }, [apiUrl, bearerToken, editing, checkApiStatus]);
 
   const handleSave = async () => {
     setLoading(true);
-    await saveApiUrl(inputUrl);
-    await saveBearerToken(inputToken);
-    setApiUrl(inputUrl);
-    setBearerTokenState(inputToken);
-    setEditing(false);
-    setLoading(false);
+    try {
+      await saveApiUrl(inputUrl);
+      await saveBearerToken(inputToken);
+      setApiUrl(inputUrl);
+      setBearerTokenState(inputToken);
+      setEditing(false);
+
+      // Vérifier immédiatement le statut après sauvegarde
+      await checkApiStatus();
+    } catch (_error) {
+      Alert.alert('Erreur', 'Impossible de sauvegarder les paramètres');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEdit = async () => {
     setInputUrl(apiUrl || '');
     setInputToken(bearerToken || '');
     setEditing(true);
+  };
+
+  const handleTestConnection = async () => {
+    if (!inputUrl || !inputToken) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+      return;
+    }
+
+    setCheckingStatus(true);
+    try {
+      // Sauvegarder temporairement pour tester
+      await saveApiUrl(inputUrl);
+      await saveBearerToken(inputToken);
+
+      const isHealthy = await GateService.isApiHealthy();
+
+      if (isHealthy) {
+        Alert.alert('Succès', 'Connexion API réussie !');
+      } else {
+        Alert.alert('Erreur', 'Impossible de se connecter à l\'API');
+      }
+    } catch (error) {
+      const errorMessage = error instanceof ApiError
+        ? error.message
+        : 'Erreur de connexion';
+      Alert.alert('Erreur de connexion', errorMessage);
+    } finally {
+      setCheckingStatus(false);
+    }
   };
 
   if (loading) {
@@ -44,6 +130,7 @@ export default function ApiCredentialsGate({ children }: { children: React.React
   if (!apiUrl || !bearerToken || editing) {
     return (
       <View style={styles.container}>
+        <Text style={styles.title}>Configuration API</Text>
 
         <Text style={styles.label}>URL de API</Text>
         <TextInput
@@ -64,19 +151,61 @@ export default function ApiCredentialsGate({ children }: { children: React.React
           secureTextEntry
         />
 
+        <View style={styles.buttonContainer}>
+          <Button
+            label={checkingStatus ? "Test en cours..." : "Tester la connexion"}
+            onPress={handleTestConnection}
+            disabled={!inputUrl || !inputToken || checkingStatus}
+            variant="outline"
+            loading={checkingStatus}
+            style={styles.testButton}
+          />
 
-        <Button
+          <Button
             label="Enregistrer"
             onPress={handleSave}
             disabled={!inputUrl || !inputToken}
-        />
+            style={styles.saveButton}
+          />
+        </View>
 
         {(apiUrl && bearerToken) && (
           <Button
             label="Annuler"
             onPress={() => setEditing(false)}
-            variant="secondary" />
+            variant="secondary"
+            style={styles.cancelButton}
+          />
         )}
+      </View>
+    );
+  }
+
+  // Afficher un avertissement si l'API n'est pas accessible
+  if (!apiStatus.isHealthy && apiStatus.error) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Problème de connexion API</Text>
+        <Text style={styles.errorText}>{apiStatus.error}</Text>
+        <Text style={styles.subText}>
+          Vérifiez votre connexion internet et vos paramètres API.
+        </Text>
+
+        <View style={styles.buttonContainer}>
+          <Button
+            label={checkingStatus ? "Vérification..." : "Réessayer"}
+            onPress={checkApiStatus}
+            disabled={checkingStatus}
+            loading={checkingStatus}
+            style={styles.retryButton}
+          />
+
+          <Button
+            label="Modifier les paramètres"
+            onPress={handleEdit}
+            variant="outline"
+          />
+        </View>
       </View>
     );
   }
@@ -86,12 +215,17 @@ export default function ApiCredentialsGate({ children }: { children: React.React
       {children}
       <View style={styles.editButton}>
         <Button
-            label="Paramètres"
-            onPress={handleEdit}
-            variant={"outline"}
-            size={"small"}
+          label="Paramètres"
+          onPress={handleEdit}
+          variant={"outline"}
+          size={"small"}
         />
+        {checkingStatus && (
+          <ActivityIndicator size="small" style={styles.statusIndicator} />
+        )}
+
       </View>
+      <View style={[styles.statusDot, { backgroundColor: apiStatus.isHealthy ? '#4CAF50' : '#F44336' }]} />
     </View>
   );
 }
@@ -102,6 +236,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
     backgroundColor: '#fff',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 32,
   },
   label: {
     fontWeight: 'bold',
@@ -114,6 +254,33 @@ const styles = StyleSheet.create({
     padding: 8,
     marginTop: 8,
   },
+  buttonContainer: {
+    marginTop: 24,
+    gap: 12,
+  },
+  testButton: {
+    marginBottom: 8,
+  },
+  saveButton: {
+    marginBottom: 8,
+  },
+  cancelButton: {
+    marginTop: 16,
+  },
+  retryButton: {
+    marginBottom: 12,
+  },
+  errorText: {
+    color: '#F44336',
+    textAlign: 'center',
+    marginBottom: 16,
+    fontSize: 16,
+  },
+  subText: {
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
   center: {
     flex: 1,
     justifyContent: 'center',
@@ -124,6 +291,19 @@ const styles = StyleSheet.create({
     bottom: 20,
     left: 70,
     right: 70,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusIndicator: {
+    marginLeft: 8,
+  },
+  statusDot: {
+    position: 'absolute',
+    top: 5,
+    left: 5,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
 });
-
