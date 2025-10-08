@@ -6,11 +6,19 @@ import {
   ViewStyle,
   TextStyle,
   ActivityIndicator,
+  View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 export interface ButtonProps {
   /** Texte affiché sur le bouton */
-  label: string;
+  label?: string;
+  /** Nom de l'icône Ionicons */
+  iconName?: keyof typeof Ionicons.glyphMap;
+  /** Taille de l'icône */
+  iconSize?: number;
+  /** Couleur de l'icône (optionnel, par défaut selon la variante) */
+  iconColor?: string;
   /** Fonction appelée lors du clic */
   onPress: () => void;
   /** Variante du bouton */
@@ -29,6 +37,9 @@ export interface ButtonProps {
 
 export default function Button({
   label,
+  iconName,
+  iconSize,
+  iconColor,
   onPress,
   variant = 'primary',
   size = 'medium',
@@ -45,6 +56,70 @@ export default function Button({
     }
   };
 
+  // Déterminer la couleur de l'icône selon la variante si pas spécifiée
+  const getIconColor = () => {
+    if (iconColor) return iconColor;
+    if (isDisabled) return variant === 'outline' ? '#8E8E93' : '#FFFFFF';
+    return variant === 'outline' ? '#007AFF' : '#FFFFFF';
+  };
+
+  // Déterminer la taille de l'icône selon la taille du bouton si pas spécifiée
+  const getIconSize = () => {
+    if (iconSize) return iconSize;
+    switch (size) {
+      case 'small':
+        return 16;
+      case 'large':
+        return 24;
+      default:
+        return 20;
+    }
+  };
+
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <ActivityIndicator
+          size="small"
+          color={variant === 'outline' ? '#007AFF' : '#FFFFFF'}
+        />
+      );
+    }
+
+    const hasIcon = iconName;
+    const hasLabel = label;
+
+    if (!hasIcon && !hasLabel) {
+      return null;
+    }
+
+    return (
+      <View style={styles.contentContainer}>
+        {hasIcon && (
+          <Ionicons
+            name={iconName}
+            size={getIconSize()}
+            color={getIconColor()}
+            style={hasLabel ? styles.iconWithLabel : undefined}
+          />
+        )}
+        {hasLabel && (
+          <Text
+            style={[
+              styles.text,
+              styles[`${variant}Text`],
+              styles[`${size}Text`],
+              isDisabled && styles.disabledText,
+              textStyle,
+            ]}
+          >
+            {label}
+          </Text>
+        )}
+      </View>
+    );
+  };
+
   return (
     <TouchableOpacity
       style={[
@@ -58,24 +133,7 @@ export default function Button({
       disabled={isDisabled}
       activeOpacity={0.7}
     >
-      {loading ? (
-        <ActivityIndicator
-          size="small"
-          color={variant === 'outline' ? '#007AFF' : '#FFFFFF'}
-        />
-      ) : (
-        <Text
-          style={[
-            styles.text,
-            styles[`${variant}Text`],
-            styles[`${size}Text`],
-            isDisabled && styles.disabledText,
-            textStyle,
-          ]}
-        >
-          {label}
-        </Text>
-      )}
+      {renderContent()}
     </TouchableOpacity>
   );
 }
@@ -86,6 +144,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
+  },
+
+  contentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  iconWithLabel: {
+    marginRight: 8,
   },
 
   // Variantes

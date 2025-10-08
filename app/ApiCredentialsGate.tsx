@@ -263,7 +263,7 @@ export default function ApiCredentialsGate({ children }: { children: React.React
       {children}
       <View style={styles.editButton}>
         <Button
-          label="Params"
+          iconName="settings-outline"
           onPress={handleEdit}
           variant={"outline"}
           size={"small"}
