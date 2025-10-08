@@ -263,7 +263,7 @@ export default function ApiCredentialsGate({ children }: { children: React.React
       {children}
       <View style={styles.editButton}>
         <Button
-          label="Paramètres"
+          label="Params"
           onPress={handleEdit}
           variant={"outline"}
           size={"small"}
@@ -336,9 +336,8 @@ const styles = StyleSheet.create({
   },
   editButton: {
     position: 'absolute',
-    bottom: 20,
-    left: 70,
-    right: 70,
+    top: 40,
+    right: 15,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -348,8 +347,8 @@ const styles = StyleSheet.create({
   },
   statusDot: {
     position: 'absolute',
-    top: 5,
-    left: 5,
+    top: 40,
+    left: 15,
     width: 12,
     height: 12,
     borderRadius: 6,

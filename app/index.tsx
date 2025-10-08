@@ -16,8 +16,8 @@ export default function Index() {
   const [timerOperation, setTimerOperation] = useState<'opening' | 'closing' | null>(null);
   const [autoCloseActive, setAutoCloseActive] = useState(false);
   const [autoCloseRemaining, setAutoCloseRemaining] = useState(0);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const autoCloseTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const autoCloseTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -70,7 +70,7 @@ export default function Index() {
         updateTimerStatus(newTime, operation);
         return newTime;
       });
-    }, 1000);
+    }, 1000) as any;
   };
 
   const updateTimerStatus = (timeLeft: number, operation: 'opening' | 'closing') => {
@@ -104,7 +104,7 @@ export default function Index() {
         }
         return newTime;
       });
-    }, 1000);
+    }, 1000) as any;
   };
 
   const stopAutoCloseTimer = () => {
@@ -180,16 +180,8 @@ export default function Index() {
   const handleOpenGate = async () => {
     setOperationInProgress(true);
     try {
-      const operation = await GateService.open();
-
-      // Démarrer le timer avec le temps configuré
+      await GateService.open();
       startTimer(openingTime, 'opening');
-
-      Alert.alert(
-        "Ouverture en cours",
-        `Porte en cours d'ouverture.\nTemps configuré: ${openingTime}s\nTemps restant API: ${Math.round(operation.timeout_remaining / 1000)}s`,
-        [{ text: "OK" }]
-      );
     } catch (error) {
       const errorMessage = error instanceof ApiError
         ? error.message
@@ -203,16 +195,8 @@ export default function Index() {
   const handleCloseGate = async () => {
     setOperationInProgress(true);
     try {
-      const operation = await GateService.close();
-
-      // Démarrer le timer avec le temps configuré
+      await GateService.close();
       startTimer(closingTime, 'closing');
-
-      Alert.alert(
-        "Fermeture en cours",
-        `Porte en cours de fermeture.\nTemps configuré: ${closingTime}s\nTemps restant API: ${Math.round(operation.timeout_remaining / 1000)}s`,
-        [{ text: "OK" }]
-      );
     } catch (error) {
       const errorMessage = error instanceof ApiError
         ? error.message
