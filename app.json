@@ -29,7 +29,8 @@
         "INTERNET",
         "NETWORK_STATE"
       ],
-      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.skit.garage"
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.skit.garage",
+      "newArchEnabled": false
     },
     "web": {
       "output": "static",
